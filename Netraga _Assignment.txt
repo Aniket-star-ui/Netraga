@@ -1,0 +1,398 @@
+
+  color: #0e1b1e;
+  font-size: 2.5rem;
+  margin-left: 1rem;
+}
+
+.loading-msg {
+  text-align: center;
+  font-size: 200%;
+  height: 20rem;
+  line-height: 20rem;
+}
+
+/* ----- messages css ends here ----- */
+
+@media only screen and (max-width: 1200px) {
+  .main-content {
+    width: 100%;
+  }
+}
+
+@media only screen and (max-width: 620px) {
+  body {
+    font-size: 1.3rem;
+  }
+
+  .main-content {
+    width: 100%;
+  }
+
+  .photos-list {
+    .photo {
+      width: 80%;
+    }
+  }
+}
+
+import React, { useState, useEffect } from 'react';
+import { connect } from 'react-redux';
+import { Form, Button } from 'react-bootstrap';
+import { beginAddPhoto } from '../actions/photos';
+
+const UploadForm = ({ errors, dispatch }) => {
+  const [photo, setPhoto] = useState(null);
+  const [isSubmitted, setIsSubmitted] = useState(false);
+  const [errorMsg, setErroMsg] = useState(null);
+
+  useEffect(() => {
+    setErroMsg(errors);
+  }, [errors]);
+
+  useEffect(() => {
+    setErroMsg(''); // reset error message on page load
+  }, []);
+
+  const handleOnChange = (event) => {
+    const file = event.target.files[0];
+    setPhoto(file);
+  };
+
+  const handleFormSubmit = (event) => {
+    event.preventDefault();
+    if (photo) {
+      setErroMsg('');
+      dispatch(beginAddPhoto(photo));
+      setIsSubmitted(true);
+    }
+  };
+
+  return (
+    <React.Fragment>
+      {errorMsg && errorMsg.upload_error ? (
+        <p className="errorMsg centered-message">{errorMsg.upload_error}</p>
+      ) : (
+        isSubmitted && (
+          <p className="successMsg centered-message">
+            Photo uploaded successfully.
+          </p>
+        )
+      )}
+      <Form
+        onSubmit={handleFormSubmit}
+        method="post"
+        encType="multipart/form-data"
+        className="upload-form"
+      >
+        <Form.Group>
+          <Form.Label>Choose photo to upload</Form.Label>
+          <Form.Control type="file" name="photo" onChange={handleOnChange} />
+        </Form.Group>
+        <Button
+          variant="primary"
+          type="submit"
+          className={`${!photo ? 'disabled submit-btn' : 'submit-btn'}`}
+          disabled={photo ? false : true}
+        >
+          Upload
+        </Button>
+      </Form>
+    </React.Fragment>
+  );
+};
+
+const mapStateToProps = (state) => ({
+  photos: state.photos || [],
+  errors: state.errors || {}
+});
+
+export default connect(mapStateToProps)(UploadForm);
+
+import React from 'react';
+import { NavLink } from 'react-router-dom';
+
+const Header = () => (
+  <header>
+    <h1>Photo Gallery App</h1>
+    <div className="links">
+      <NavLink to="/" className="link">
+        Home
+      </NavLink>
+      <NavLink to="/gallery" className="link">
+        Gallery
+      </NavLink>
+    </div>
+  </header>
+);
+
+export default Header;
+
+import React from 'react';
+import UploadForm from './UploadForm';
+
+const HomePage = () => (
+  <div className="home-page">
+    <UploadForm />
+  </div>
+);
+
+export default HomePage;
+
+import React from 'react';
+
+const NotFoundPage = () => (
+  <div>
+    <h3>Page not found</h3>
+  </div>
+);
+
+export default NotFoundPage;
+
+import React from 'react';
+import { Card } from 'react-bootstrap';
+
+const Photo = ({ id }) => {
+  return (
+    <Card className="photo">
+      <Card.Img
+        variant="top"
+        src={`http://localhost:3300/photos/${id}`}
+        alt="Photo"
+      />
+    </Card>
+  );
+};
+
+export default Photo;
+
+import React, { useEffect, useState } from 'react';
+import { connect } from 'react-redux';
+import { startLoadPhotos } from '../actions/photos';
+import Photo from './Photo';
+
+const Gallary = ({ errors, photos, dispatch }) => {
+  const [isLoading, setIsLoading] = useState(false);
+
+  useEffect(() => {
+    setIsLoading(true);
+    dispatch(startLoadPhotos());
+  }, []);
+
+  useEffect(() => {
+    if (photos.length > 0) {
+      setIsLoading(false);
+    }
+  }, [photos]);
+
+  return (
+    <div className="photos-list">
+      {errors && errors.get_error && (
+        <p className="errorMsg centered-message">{errors.get_error}</p>
+      )}
+      {isLoading ? (
+        <div className="loading-msg centered-message">Loading...</div>
+      ) : (
+        photos.map((photo) => <Photo key={photo._id} id={photo._id} />)
+      )}
+    </div>
+  );
+};
+
+const mapStateToProps = (state) => ({
+  photos: state.photos || [],
+  errors: state.errors || {}
+});
+
+export default connect(mapStateToProps)(Gallary);
+
+export const getErrors = (errors) => ({
+  type: 'GET_ERRORS',
+  errors
+});
+
+import axios from 'axios';
+import { BASE_API_URL } from '../utils/constants';
+import { getErrors } from './errors';
+
+export const beginAddPhoto = (photo) => {
+  return async (dispatch) => {
+    try {
+      const formData = new FormData();
+      formData.append('photo', photo);
+      await axios.post(`${BASE_API_URL}/photos`, formData, {
+        headers: {
+          'Content-Type': 'multipart/form-data'
+        }
+      });
+    } catch (error) {
+      error.response && dispatch(getErrors(error.response.data));
+    }
+  };
+};
+
+export const startLoadPhotos = () => {
+  return async (dispatch) => {
+    try {
+      const photos = await axios.get(`${BASE_API_URL}/photos`);
+      dispatch(loadPhotos(photos.data));
+    } catch (error) {
+      error.response && dispatch(getErrors(error.response.data));
+    }
+  };
+};
+
+export const loadPhotos = (photos) => ({
+  type: 'LOAD_PHOTOS',
+  photos
+});
+
+const errorsReducer = (state = {}, action) => {
+  switch (action.type) {
+    case 'GET_ERRORS':
+      return action.errors;
+    default:
+      return state;
+  }
+};
+
+export default errorsReducer;
+
+const photosReducer = (state = [], action) => {
+  switch (action.type) {
+    case 'LOAD_PHOTOS':
+      return action.photos;
+    default:
+      return state;
+  }
+};
+
+export default photosReducer;
+
+const photosReducer = (state = [], action) => {
+  switch (action.type) {
+    case 'LOAD_PHOTOS':
+      return action.photos;
+    default:
+      return state;
+  }
+};
+
+export default photosReducer;
+
+const photosReducer = (state = [], action) => {
+  switch (action.type) {
+    case 'LOAD_PHOTOS':
+      return action.photos;
+    default:
+      return state;
+  }
+};
+
+export default photosReducer;
+
+export const BASE_API_URL = 'http://localhost:3300';
+
+const mongoose = require('mongoose');
+
+mongoose.connect('mongodb://127.0.0.1:27017/photo_gallery', {
+  useNewUrlParser: true,
+  useUnifiedTopology: true
+});
+
+const mongoose = require('mongoose');
+
+const PhotoSchema = mongoose.Schema({
+  photo: {
+    type: Buffer
+  }
+});
+
+PhotoSchema.methods.toJSON = function () {
+  const result = this.toObject();
+  delete result.photo;
+  return result;
+};
+
+const Photo = mongoose.model('Photo', PhotoSchema);
+
+module.exports = Photo;
+
+const express = require('express');
+const multer = require('multer');
+const Photo = require('../model/Photo');
+const Router = express.Router();
+
+const upload = multer({
+  limits: {
+    fileSize: 1000000 // max file size 1MB = 1000000 bytes
+  },
+  fileFilter(req, file, cb) {
+    if (!file.originalname.match(/\.(jpeg|jpg)$/)) {
+      cb(new Error('only upload files with jpg or jpeg format.'));
+    }
+    cb(undefined, true); // continue with upload
+  }
+});
+
+Router.post(
+  '/photos',
+  upload.single('photo'),
+  async (req, res) => {
+    try {
+      const photo = new Photo(req.body);
+      const file = req.file.buffer;
+      photo.photo = file;
+
+      await photo.save();
+      res.status(201).send({ _id: photo._id });
+    } catch (error) {
+      res.status(500).send({
+        upload_error: 'Error while uploading file...Try again later.'
+      });
+    }
+  },
+  (error, req, res, next) => {
+    if (error) {
+      res.status(500).send({
+        upload_error: error.message
+      });
+    }
+  }
+);
+
+Router.get('/photos', async (req, res) => {
+  try {
+    const photos = await Photo.find({});
+    res.send(photos);
+  } catch (error) {
+    res.status(500).send({ get_error: 'Error while getting list of photos.' });
+  }
+});
+
+Router.get('/photos/:id', async (req, res) => {
+  try {
+    const result = await Photo.findById(req.params.id);
+    res.set('Content-Type', 'image/jpeg');
+    res.send(result.photo);
+  } catch (error) {
+    res.status(400).send({ get_error: 'Error while getting photo.' });
+  }
+});
+
+module.exports = Router;
+
+const express = require('express');
+const cors = require('cors');
+const photosRouter = require('./routers/photos');
+require('./db/connection');
+
+const app = express();
+const PORT = process.env.PORT || 3300;
+
+app.use(cors());
+app.use(photosRouter);
+
+app.listen(PORT, () => {
+  console.log(`server started on port ${PORT}`);
+});
+
